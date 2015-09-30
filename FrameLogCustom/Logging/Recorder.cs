@@ -5,6 +5,7 @@ using System.Linq;
 using FrameLog.History;
 using FrameLog.Models;
 using FrameLog.Translation.Serializers;
+using FrameLog.Helpers;
 
 namespace FrameLog.Logging
 {

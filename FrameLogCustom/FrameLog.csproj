@@ -59,7 +59,9 @@
     <Compile Include="Contexts\IHistoryContext.cs" />
     <Compile Include="Contexts\ObjectContextAdapter.cs" />
     <Compile Include="Contexts\ObjectContextAdapterAsync.cs" />
+    <Compile Include="Exceptions\ChangesNotDetectedException.cs" />
     <Compile Include="Exceptions\ConflictingTransactionException.cs" />
+    <Compile Include="Exceptions\CreationDoesNotExistInLogException.cs" />
     <Compile Include="Exceptions\ErrorInDeferredCalculation.cs" />
     <Compile Include="Exceptions\FailedToRetrieveObjectException.cs" />
     <Compile Include="Exceptions\InvalidFrameLogRecordException.cs" />
@@ -67,6 +69,7 @@
     <Compile Include="Exceptions\ObjectTypeDoesNotExistInDataModelException.cs" />
     <Compile Include="Exceptions\UnableToCloneObjectException.cs" />
     <Compile Include="Exceptions\UnableToInstantiateObjectException.cs" />
+    <Compile Include="Exceptions\UnknownPropertyInLogException.cs" />
     <Compile Include="Filter\AttributeBasedLoggingFilter.cs" />
     <Compile Include="Filter\BlacklistLoggingFilter.cs" />
     <Compile Include="Filter\DoLogAttribute.cs" />
@@ -82,6 +85,7 @@
     <Compile Include="FrameLogModule.cs" />
     <Compile Include="FrameLogModuleAsync.cs" />
     <Compile Include="Helpers\AttributeHelpers.cs" />
+    <Compile Include="Helpers\DisposableSavingChangesListener.cs" />
     <Compile Include="Helpers\ExpressionHelper.cs" />
     <Compile Include="Helpers\MetadataSpaceMapper.cs" />
     <Compile Include="Helpers\ObjectHelpers.cs" />

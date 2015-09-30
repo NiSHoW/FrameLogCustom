@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 using FrameLog.Logging;
+using FrameLog.Exceptions;
+using System.Data.Entity.Core.Objects;
 
 namespace FrameLog
 {
