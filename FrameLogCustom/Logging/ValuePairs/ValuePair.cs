@@ -7,33 +7,37 @@ namespace FrameLog.Logging.ValuePairs
 {
     internal class ValuePair : IValuePair
     {
-        protected readonly object originalValue;
-        protected readonly object newValue;
+        protected readonly Func<object> originalValue;
+        protected readonly Func<object> newValue;
         protected readonly string propertyName;
         protected readonly EntityState state;
         protected readonly ISerializationManager serializer;
 
-        internal ValuePair(object originalValue, object newValue, string propertyName, EntityState state, ISerializationManager serializer)
+        internal ValuePair(Func<object> originalValue, Func<object> newValue, string propertyName, EntityState state, ISerializationManager serializer)
         {
-            this.originalValue = get(originalValue);
-            this.newValue = get(newValue);
+            this.originalValue = checkDbNull(originalValue);
+            this.newValue = checkDbNull(newValue);
             this.propertyName = propertyName;
             this.state = state;
             this.serializer = serializer;
         }
 
-        private object get(object value)
+        private Func<object> checkDbNull(Func<object> value)
         {
-            if (value is DBNull)
-                return null;
-            return value;
+            return () =>
+            {
+                var obj = (value != null ? value() : null);
+                if (obj is DBNull)
+                    return null;
+                return obj;
+            };
         }
 
         internal IChangeType Type
         {
             get
             {
-                var value = originalValue ?? newValue;
+                var value = originalValue() ?? newValue();
                 return value.GetChangeType();
             }
         }
@@ -44,7 +48,7 @@ namespace FrameLog.Logging.ValuePairs
             {
                 return state == EntityState.Added
                     || state == EntityState.Deleted
-                    || !serializer.Compare(newValue, originalValue);
+                    || !serializer.Compare(newValue(), originalValue());
             }
         }
 
@@ -53,12 +57,12 @@ namespace FrameLog.Logging.ValuePairs
             get { return propertyName; }
         }
 
-        public object NewValue
+        public Func<object> NewValue
         {
             get { return newValue; }
         }
 
-        public object OriginalValue
+        public Func<object> OriginalValue
         {
             get { return originalValue; }
         }

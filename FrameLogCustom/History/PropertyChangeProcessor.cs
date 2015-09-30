@@ -1,4 +1,5 @@
-﻿using FrameLog.Helpers;
+﻿using FrameLog.Exceptions;
+using FrameLog.Helpers;
 using FrameLog.Models;
 using System;
 using System.Collections.Generic;
@@ -77,6 +78,7 @@ namespace FrameLog.History
             else
             {
                 var existingValue = property.GetValue(model, null);
+                var value = binder.Bind(wrapped.Value, property.PropertyType, existingValue);
                 if (isEntityCollection(property) && existingValue != null)
                 {
                     // do nothing, its contents were already updated by the binder,
@@ -84,7 +86,6 @@ namespace FrameLog.History
                 }
                 else
                 {
-                    var value = binder.Bind(wrapped.Value, property.PropertyType, existingValue);
                     property.SetValue(model, value, null);
                 }
             }

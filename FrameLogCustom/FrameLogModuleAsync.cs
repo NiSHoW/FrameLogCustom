@@ -9,7 +9,8 @@ using FrameLog.Logging;
 namespace FrameLog
 {
     public partial class FrameLogModule<TChangeSet, TPrincipal>
-        where TChangeSet : IChangeSet<TPrincipal> {
+        where TChangeSet : IChangeSet<TPrincipal>
+    {
         /// <summary>
         /// Save the changes and log them as controlled by the logging filter. 
         /// A TransactionScope will be used to wrap the save, which will use an ambient 
@@ -58,40 +59,62 @@ namespace FrameLog
         protected async Task<ISaveResult<TChangeSet>> saveChangesAsync(TPrincipal principal, ITransactionProvider transactionProvider, CancellationToken cancellationToken)
         {
             if (!Enabled)
-                return new SaveResult<TChangeSet, TPrincipal>(await context.SaveAndAcceptAllChangesAsync(cancellationToken));
+                return new SaveResult<TChangeSet, TPrincipal>(await context.SaveAndAcceptChangesAsync(cancellationToken: cancellationToken));
 
             var result = new SaveResult<TChangeSet, TPrincipal>();
-            cancellationToken.ThrowIfCancellationRequested();
-
+            
             // We want to split saving and logging into two steps, so that when we
             // generate the log objects the database has already assigned IDs to new
             // objects. Then we can log about them meaningfully. So we wrap it in a
             // transaction so that even though there are two saves, the change is still
             // atomic.
+            cancellationToken.ThrowIfCancellationRequested();
             await transactionProvider.InTransactionAsync(async () =>
             {
                 var logger = new ChangeLogger<TChangeSet, TPrincipal>(context, factory, filter, serializer);
-                cancellationToken.ThrowIfCancellationRequested();
+                var oven = (IOven<TChangeSet, TPrincipal>)null;
+                
+
+
+
+
 
                 // First we detect all the changes, but we do not save or accept the changes 
                 // (i.e. we keep our record of them).
+                cancellationToken.ThrowIfCancellationRequested(); 
                 context.DetectChanges();
+                
+                // Then we save and accept the changes, which invokes the standard EntityFramework
+                // DbContext.SaveChanges(), including any custom user logic the end-user has defined. 
+                // Eventually, DbContext.InternalContext.ObjectContext.SaveChanges() will be invoked
+                // and then the delegate below is called back to prepare the log objects/changes.
                 cancellationToken.ThrowIfCancellationRequested();
+                result.AffectedObjectCount = await context.SaveAndAcceptChangesAsync(cancellationToken: cancellationToken, onSavingChanges:
+                    (sender, args) =>
+                    {
+                        // This is invoked just moments before EntityFramework accepts the original changes.
+                        // Now is our best oppertunity to create the log objects, which will not yet be attached 
+                        // to the context. They are unattached so that the context change tracker won't noticed 
+                        // them when accepting the original changes.
+                        cancellationToken.ThrowIfCancellationRequested();
+                        oven = logger.Log(context.ObjectStateManager);
 
-                // This returns the log objects, but they are not attached to the context
-                // so the context change tracker won't noticed them
-                var oven = logger.Log(context.ObjectStateManager);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // Then we save and accept the changes, but only the original changes - 
-                // the context hasn't yet detected the log changes
-                result.AffectedObjectCount = await context.SaveAndAcceptAllChangesAsync(cancellationToken);
+                        // NOTE: This is the last chance to cancel the save. After this, the original changes
+                        //       will have been accepted and it will be too late to stop now (see comment below)
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                );
 
                 // NOTE: From this point in, we stop honoring the cancellation token.
-                //       Why? because if we did, you could end up object changes commited without any logging.
-                //       In the interest of data integrity, we either save the object changes + logging, or save nothing at all.
-            
-                // This code then attaches the log objects to the context
+                //       Why? because if we did, you would end up persisted object changes without any associated logging.
+                //       In the interest of data integrity, we either persist the object changes + logging, or nothing at all.
+
+                // If the oven is not set here, then DbContext.SaveChanges() did not call our delegate back
+                // when accepting the original changes. Without the oven, we cannot bake the logged changes.
+                if (oven == null)
+                    throw new ChangesNotDetectedException();
+
+                // Finally, we attach the previously prepared log objects to the context (and save/accept them)
                 if (oven.HasChangeSet)
                 {
                     // First do any deferred log value calculations.
@@ -102,7 +125,9 @@ namespace FrameLog
                     context.DetectChanges();
 
                     // Then we save and accept the changes that result from creating the log objects
-                    context.SaveAndAcceptAllChanges();
+                    // NOTE: We do not use SaveAndAcceptChanges() here because we are not interested in going
+                    //       through DbContext.SaveChanges() and invoking end-users custom logic.
+                    await context.SaveChangesAsync(SaveOptions.AcceptAllChangesAfterSave);
                 }
             });
             return result;

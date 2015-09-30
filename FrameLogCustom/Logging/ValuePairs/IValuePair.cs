@@ -10,8 +10,8 @@ namespace FrameLog.Logging.ValuePairs
     {
         bool HasChanged { get; }
         string PropertyName { get; }
-        object OriginalValue { get; }
-        object NewValue { get; }
+        Func<object> OriginalValue { get; }
+        Func<object> NewValue { get; }
         EntityState State { get; }
     }
 }

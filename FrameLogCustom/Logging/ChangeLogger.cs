@@ -82,7 +82,12 @@ namespace FrameLog.Logging
                     var entity = entry.Entity;
                     foreach (var valuePair in valuePairs)
                     {
-                        recorder.Record(entity, changeTypeMapper(entry.State), () => context.GetReferenceForObject(entity), valuePair.PropertyName, () => valuePair.NewValue, () => valuePair.OriginalValue);
+                        recorder.Record(entity, 
+							changeTypeMapper(entry.State), 
+							() => context.GetReferenceForObject(entity), 
+							valuePair.PropertyName, 
+							valuePair.NewValue, 
+							valuePair.OriginalValue);
                     }
                 }
             }
@@ -132,17 +137,13 @@ namespace FrameLog.Logging
                 return;
 
             // Generate the change
-            Func<object> originalValue = getForeignValue(entry, entity, foreignEnd, property.Name);
             Func<object> value = getForeignValue(entry, entity, foreignEnd, property.Name);
 
-            recorder.Record(entity, changeTypeMapper(entry.State, true), () => context.GetReferenceForObject(entity), property.Name, value, originalValue, true);
+            recorder.Record(entity, changeTypeMapper(entry.State, true), () => context.GetReferenceForObject(entity), property.Name, value, () => null, true);
         }
 
         private Func<object> getForeignValue(ObjectStateEntry entry, object entity, AssociationEndMember foreignEnd, string propertyName)
         {
-            // Get the key that identifies the the object we are making or breaking a relationship with
-            var foreignKey = getEndEntityKey(entry, foreignEnd);
-            string change = getKeyReference(foreignKey);
 
             if (foreignEnd.RelationshipMultiplicity == RelationshipMultiplicity.Many)
             {
@@ -151,7 +152,12 @@ namespace FrameLog.Logging
             else
             {
                 if (entry.State == EntityState.Added)
-                    return () => change;
+                    return () =>  
+					{
+			            // Get the key that identifies the the object we are making or breaking a relationship with
+			            var foreignKey = getEndEntityKey(entry, foreignEnd);
+			            return getKeyReference(foreignKey);
+					};
                 else
                     return null;
             }

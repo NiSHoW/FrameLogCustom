@@ -18,7 +18,7 @@ namespace FrameLog.Logging
 
         public Recorder(IChangeSetFactory<TChangeSet, TPrincipal> factory)
         {
-            this.deferredObjectChanges = new Dictionary<object, DeferredObjectChange<TPrincipal>>();
+            this.deferredObjectChanges = new Dictionary<object, DeferredObjectChange<TPrincipal>>(new ReferenceEqualityComparer());
             this.factory = factory;
             this.serializer = null;
         }
@@ -72,7 +72,7 @@ namespace FrameLog.Logging
 
         private DeferredObjectChange<TPrincipal> getOrCreateNewDeferredObjectChangeFor(TChangeSet set, object entity, ChangeType changeType,  string typeName, Func<string> deferredReference)
         {
-            var deferredObjectChange = deferredObjectChanges.SingleOrDefault(doc => doc.Key == entity).Value;
+            var deferredObjectChange = deferredObjectChanges.SingleOrDefault(doc => ReferenceEquals(doc.Key, entity)).Value;
             if (deferredObjectChange != null)
                 return deferredObjectChange;
 

@@ -20,17 +20,18 @@ namespace FrameLog.Logging.ValuePairs
             switch (state)
             {
                 case EntityState.Added:
-                    return Get(null, entry.CurrentValues[propertyName], propertyName, state, serializer);
+                    return Get(null, () => entry.CurrentValues[propertyName], propertyName, state, serializer);
                 case EntityState.Deleted:
-                    return Get(entry.OriginalValues[propertyName], null, propertyName, state, serializer);
+                    return Get(() => entry.OriginalValues[propertyName], null, propertyName, state, serializer);
                 case EntityState.Modified:
-                    return Get(entry.OriginalValues[propertyName], entry.CurrentValues[propertyName], propertyName, state, serializer);
+                    return Get(() => entry.OriginalValues[propertyName], 
+						() => entry.CurrentValues[propertyName], propertyName, state, serializer);
                 default:
                     throw new NotImplementedException(string.Format("Unable to deal with ObjectStateEntry in '{0}' state",
                         state));
             }
         }
-        public static IEnumerable<IValuePair> Get(object oldValue, object newValue, string propertyName, EntityState state, ISerializationManager serializer)
+        public static IEnumerable<IValuePair> Get(Func<object> oldValue, Func<object> newValue, string propertyName, EntityState state, ISerializationManager serializer)
         {
             var pair = new ValuePair(oldValue, newValue, propertyName, state, serializer);
             if (pair.Type.IsA(typeof(System.Data.IDataRecord)))

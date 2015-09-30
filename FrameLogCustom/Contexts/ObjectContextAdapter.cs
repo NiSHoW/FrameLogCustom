@@ -1,4 +1,5 @@
 ﻿using FrameLog.Exceptions;
+using FrameLog.Helpers;
 using FrameLog.Models;
 using System;
 using System.Data.Entity.Core;
@@ -18,11 +19,6 @@ namespace FrameLog.Contexts
         public ObjectContextAdapter(ObjectContext context)
         {
             this.context = context;
-        }
-
-        public int SaveChanges(SaveOptions options)
-        {
-            return context.SaveChanges(options);
         }
 
         public virtual object GetObjectByKey(EntityKey key)
@@ -79,6 +75,7 @@ namespace FrameLog.Contexts
 
             IHasLoggingReference entityWithReference = entity as IHasLoggingReference;
             if (entityWithReference != null)
+				//TODO: controllare entityWithReference.Reference.ToString();
                 return entityWithReference.Reference().ToString();
 
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.IgnoreCase;
@@ -114,9 +111,19 @@ namespace FrameLog.Contexts
             context.DetectChanges();
         }
 
-        public virtual int SaveAndAcceptAllChanges()
+        public virtual int SaveChanges(SaveOptions saveOptions)
         {
-            return context.SaveChanges(SaveOptions.AcceptAllChangesAfterSave);
+            return context.SaveChanges(saveOptions);
+        }
+
+        public virtual int SaveAndAcceptChanges(EventHandler onSavingChanges = null)
+        {
+            // Wrap the save operation inside a disposable listener for the ObjectContext.SaveChanges event
+            // By doing this, the event handler will be invoked after saving but BEFORE accepting the changes.
+            using (new DisposableSavingChangesListener(context, onSavingChanges))
+            {
+                return context.SaveChanges(SaveOptions.AcceptAllChangesAfterSave);
+            }
         }
 
         public abstract IQueryable<IChangeSet<TPrincipal>> ChangeSets { get; }

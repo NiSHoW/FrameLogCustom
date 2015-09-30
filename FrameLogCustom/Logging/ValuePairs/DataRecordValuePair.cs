@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using FrameLog.Translation.Serializers;
@@ -21,13 +22,13 @@ namespace FrameLog.Logging.ValuePairs
         internal DataRecordValuePair(IValuePair pair, ISerializationManager serializer)
             : base(pair.OriginalValue, pair.NewValue, pair.PropertyName, pair.State, serializer) { }
 
-        private IDataRecord originalRecord
+        private Func<IDataRecord> originalRecord
         {
-            get { return (IDataRecord)OriginalValue; }
+            get { return () => ((IDataRecord)OriginalValue()); }
         }
-        private IDataRecord newRecord
+        private Func<IDataRecord> newRecord
         {
-            get { return (IDataRecord)NewValue; }
+            get { return () => ((IDataRecord)NewValue()); }
         }
 
         internal IEnumerable<IValuePair> SubValuePairs
@@ -47,12 +48,16 @@ namespace FrameLog.Logging.ValuePairs
             }
         }
 
-        private object getOrNull(IDataRecord record, string fieldName)
+        private Func<object> getOrNull(Func<IDataRecord> record, string fieldName)
         {
-            if (record != null)
-                return record[fieldName];
-            else
-                return null;
+            return () =>
+            {
+                var obj = (record != null ? record() : null);
+                if (obj != null)
+                    return obj[fieldName];
+                else
+                    return null;
+            };
         }
 
         private IEnumerable<string> fieldNames
@@ -64,13 +69,14 @@ namespace FrameLog.Logging.ValuePairs
             }
         }
 
-        private IEnumerable<string> fieldNamesFor(IDataRecord record)
+        private IEnumerable<string> fieldNamesFor(Func<IDataRecord> record)
         {
-            if (record != null)
+            var obj = record();
+            if (obj != null)
             {
-                foreach (int index in Enumerable.Range(0, record.FieldCount))
+                foreach (int index in Enumerable.Range(0, obj.FieldCount))
                 {
-                    yield return record.GetName(index);
+                    yield return obj.GetName(index);
                 }
             }
         }

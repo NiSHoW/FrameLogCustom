@@ -8,6 +8,13 @@ using FrameLog.Translation.ValueTranslators;
 
 namespace FrameLog.Translation
 {
+    /// <summary>
+    /// The default binding and serialization manager
+    /// </summary>
+    /// <remarks>
+    /// This manager supports the formats: 
+    /// Primitive, Guid, DateTime, DateTimeOffset, TimeSpan, Enum, Binary Blob, Nullable, and Collection
+    /// </remarks>
     public partial class ValueTranslationManager : ISerializationManager, IBindManager
     {
         protected List<IValueTranslator> translators;
