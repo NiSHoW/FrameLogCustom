@@ -2,8 +2,9 @@
 using System.Collections.Generic;
 using System.Data.Entity.Core.Objects;
 using System.Linq;
+using FrameLog.History;
 using FrameLog.Models;
-using System.Data.Entity;
+using FrameLog.Translation.Serializers;
 
 namespace FrameLog.Logging
 {
@@ -12,32 +13,39 @@ namespace FrameLog.Logging
     {
         private TChangeSet set;
         private IChangeSetFactory<TChangeSet, TPrincipal> factory;
-        private DeferredValueMap<IObjectChange<TPrincipal>> deferredValues;
+        private IDictionary<object, DeferredObjectChange<TPrincipal>> deferredObjectChanges;
+        private ISerializationManager serializer;
 
         public Recorder(IChangeSetFactory<TChangeSet, TPrincipal> factory)
         {
-            this.deferredValues = new DeferredValueMap<IObjectChange<TPrincipal>>();
+            this.deferredObjectChanges = new Dictionary<object, DeferredObjectChange<TPrincipal>>();
             this.factory = factory;
+            this.serializer = null;
+        }
+
+        public Recorder(IChangeSetFactory<TChangeSet, TPrincipal> factory, ISerializationManager serializer)
+            : this(factory)
+        {
+            this.serializer = serializer;
         }
 
         public bool HasChangeSet { get { return set != null; } }
 
-        public void Record(object entity, string reference, string propertyName, Func<object> deferredValue, EntityState entityState, Func<object> oldValue)
+        public void Record(object entity, ChangeType changeType, Func<string> deferredReference, string propertyName, Func<object> deferredValue, Func<object> deferredOldValue, Boolean isManyMany = false)
         {
             ensureChangeSetExists();
 
-            string typeName = ObjectContext.GetObjectType(entity.GetType()).Name;
-            string key = reference;
-            var objectChange = getObjectChangeFor(set, typeName, key, entityState);
-
-            record(objectChange, propertyName, deferredValue, oldValue);
+            var typeName = ObjectContext.GetObjectType(entity.GetType()).Name;
+            var deferredObjectChange = getOrCreateNewDeferredObjectChangeFor(set, entity, changeType, typeName, deferredReference);
+            record(deferredObjectChange, propertyName, deferredValue, deferredOldValue, isManyMany);
         }
-        private void record(IObjectChange<TPrincipal> objectChange, string propertyName, Func<object> deferredValue, Func<object> oldValue)
+        private void record(DeferredObjectChange<TPrincipal> deferredObjectChange, string propertyName, Func<object> deferredValue, Func<object> deferredOldValue, Boolean isManyMany = false)
         {
-            IPropertyChange<TPrincipal> propertyChange = getPropertyChangeFor(objectChange, propertyName);
+            var deferredValues = deferredObjectChange.FutureValues;
+            var propertyChange = getOrCreateNewPropertyChangeFor(deferredObjectChange.ObjectChange, propertyName, isManyMany);
             if (deferredValue != null)
             {
-                deferredValues.Store(objectChange, propertyName, deferredValue, oldValue);
+                deferredValues.Store(propertyName, deferredValue, deferredOldValue);
             }
         }
 
@@ -53,66 +61,33 @@ namespace FrameLog.Logging
         public TChangeSet Bake(DateTime timestamp, TPrincipal author)
         {
             set.Author = author;
-            set.Timestamp = timestamp;
+            set.TimestampDate = timestamp;
 
-            foreach (var objectChange in set.ObjectChanges)
+            foreach (var deferredObjectChange in deferredObjectChanges.Values)
             {
-                if (deferredValues.HasContainer(objectChange))
-                    bake(objectChange);
+                deferredObjectChange.Bake();
             }
             return set;
         }
-        private void bake(IObjectChange<TPrincipal> objectChange)
-        {
-            var bakedValues = deferredValues.CalculateAndRetrieve(objectChange);
-            foreach (KeyValuePair<string, Tuple<object, object>> kv in bakedValues)
-            {
-                var propertyChange = getPropertyChangeFor(objectChange, kv.Key);
-                setValue(propertyChange, kv.Value.Item1, kv.Value.Item2);
-            }
-        }
-        private void setValue(IPropertyChange<TPrincipal> propertyChange, object value, object oldValue)
-        {            
-            string valueAsString = valueToString(value);
-            string oldValueAsString = valueToString(oldValue);
-            int valueAsInt;
 
-            propertyChange.Value = valueAsString;
-            propertyChange.OldValue = oldValueAsString;
-            
-            if (int.TryParse(propertyChange.Value, out valueAsInt))
-            {
-                propertyChange.ValueAsInt = valueAsInt;
-            }
-        }
-        private string valueToString(object value)
+        private DeferredObjectChange<TPrincipal> getOrCreateNewDeferredObjectChangeFor(TChangeSet set, object entity, ChangeType changeType,  string typeName, Func<string> deferredReference)
         {
-            if (value == null)
-                return null;
-            else
-                return value.ToString();
-        }
+            var deferredObjectChange = deferredObjectChanges.SingleOrDefault(doc => doc.Key == entity).Value;
+            if (deferredObjectChange != null)
+                return deferredObjectChange;
 
-        private IObjectChange<TPrincipal> get(TChangeSet set, string typeName, object reference)
-        {
-            return set.ObjectChanges.Single(s => s.TypeName == typeName && s.ObjectReference == reference.ToString());
+            var result = factory.ObjectChange();
+            result.TypeName = typeName;
+            result.ObjectReference = null;
+            result.ChangeType = changeType;
+            result.ChangeSet = set;
+            set.Add(result);
+
+            deferredObjectChange = new DeferredObjectChange<TPrincipal>(result, deferredReference, serializer);
+            deferredObjectChanges.Add(entity, deferredObjectChange);
+            return deferredObjectChange;
         }
-        private IObjectChange<TPrincipal> getObjectChangeFor(TChangeSet set, string typeName, string key, EntityState entityState)
-        {
-            var result = set.ObjectChanges.SingleOrDefault(oc => oc.TypeName == typeName
-                && oc.ObjectReference == key);
-            if (result == null)
-            {
-                result = factory.ObjectChange();
-                result.TypeName = typeName;
-                result.ObjectReference = key;
-                result.ChangeSet = set;
-                result.OperationType = entityState;
-                set.Add(result);
-            }
-            return result;
-        }
-        private IPropertyChange<TPrincipal> getPropertyChangeFor(IObjectChange<TPrincipal> objectChange, string propertyName)
+        private IPropertyChange<TPrincipal> getOrCreateNewPropertyChangeFor(IObjectChange<TPrincipal> objectChange, string propertyName, Boolean isManyMany = false)
         {
             var result = objectChange.PropertyChanges.SingleOrDefault(pc => pc.PropertyName == propertyName);
             if (result == null)
@@ -122,6 +97,9 @@ namespace FrameLog.Logging
                 result.PropertyName = propertyName;
                 result.Value = null;
                 result.ValueAsInt = null;
+                result.OldValue = null;
+                result.OldValueAsInt = null;
+                result.IsManyMany = isManyMany;
                 objectChange.Add(result);
             }
             return result;

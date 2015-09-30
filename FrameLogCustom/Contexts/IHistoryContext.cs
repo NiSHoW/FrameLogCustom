@@ -3,9 +3,14 @@ using System.Linq;
 
 namespace FrameLog.Contexts
 {
-    public interface IHistoryContext<TChangeSet, TPrincipal>
-        where TChangeSet : IChangeSet<TPrincipal>
+    public interface IHistoryContext
     {
+        /// <summary>
+        /// Returns true if the object has a logging reference, otherwise false.
+        /// </summary>
+        /// <param name="model"></param>
+        /// <returns></returns>
+        bool ObjectHasReference(object model);
         /// <summary>
         /// Returns a unique reference that FrameLog uses to refer to the object
         /// in the logs. Normally the primary key.
@@ -20,7 +25,11 @@ namespace FrameLog.Contexts
         /// GetReferenceForObject(GetObjectByReference(type, reference)) == reference
         /// </summary>
         object GetObjectByReference(System.Type type, string raw);
+    }
 
+    public interface IHistoryContext<TChangeSet, TPrincipal> : IHistoryContext
+        where TChangeSet : IChangeSet<TPrincipal>
+    {
         IQueryable<IChangeSet<TPrincipal>> ChangeSets { get; }
         IQueryable<IObjectChange<TPrincipal>> ObjectChanges { get; }
         IQueryable<IPropertyChange<TPrincipal>> PropertyChanges { get; }

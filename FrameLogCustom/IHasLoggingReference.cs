@@ -1,7 +1,10 @@
-﻿namespace FrameLog
+﻿using System.Reflection;
+
+namespace FrameLog
 {
     public interface IHasLoggingReference
     {
-        object Reference { get; }
+        object Reference();
+        string ReferenceKey();
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FrameLog.Models
 {
@@ -8,7 +9,8 @@ namespace FrameLog.Models
         IEnumerable<IObjectChange<TPrincipal>> ObjectChanges { get; }
         void Add(IObjectChange<TPrincipal> objectChange);
 
-        DateTime Timestamp { get; set; }
+        DateTimeOffset TimestampDate { get; set; }
+
         TPrincipal Author { get; set; }
     }
 }

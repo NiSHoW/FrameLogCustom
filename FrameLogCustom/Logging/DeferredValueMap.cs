@@ -1,38 +1,35 @@
-﻿using FrameLog.Exceptions;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using FrameLog.Exceptions;
 
 namespace FrameLog.Logging
 {
-    public class DeferredValueMap<TContainer>
+    public class DeferredValueMap
     {
-        private Dictionary<TContainer, Dictionary<string, Tuple<Func<object>, Func<object>>>> map;
+        private Dictionary<string, Tuple<DeferredValue, DeferredValue>> map;
+        private object container;
 
-        public DeferredValueMap()
+        public DeferredValueMap(object container = null)
         {
-            map = new Dictionary<TContainer, Dictionary<string, Tuple<Func<object>, Func<object>>>>();
+            this.map = new Dictionary<string, Tuple<DeferredValue, DeferredValue>>();
+            this.container = container;
         }
 
-        public void Store(TContainer container, string key, Func<object> future, Func<object> past)
+        public void Store(string key, Func<object> futureValue, Func<object> oldFutureValue)
         {
-            var subMap = getSubmap(container);
-            subMap[key] = new Tuple<Func<object>, Func<object>>(future, past);
+            map[key] = new Tuple<DeferredValue, DeferredValue>(new DeferredValue(futureValue), new DeferredValue(oldFutureValue));
         }
-        public bool HasContainer(TContainer container)
+        public IDictionary<string, Tuple<object, object>> CalculateAndRetrieve()
         {
-            return map.ContainsKey(container);
-        }
-        public IDictionary<string, Tuple<object,object>> CalculateAndRetrieve(TContainer container)
-        {
-            var subMap = map[container];
             var result = new Dictionary<string, Tuple<object, object>>();
-            foreach (var kv in subMap)
+            foreach (var kv in map)
             {
                 try
                 {
-                    result[kv.Key] = new Tuple<object,object>(kv.Value.Item1(), kv.Value.Item2 == null ? null : kv.Value.Item2());
+                    result[kv.Key] = new Tuple<object, object>(
+                        kv.Value.Item1.CalculateAndRetrieve(),
+                        kv.Value.Item2.CalculateAndRetrieve()
+                    );
                 }
                 catch (Exception e)
                 {
@@ -40,17 +37,6 @@ namespace FrameLog.Logging
                 }
             }
             return result;
-        }
-
-        private Dictionary<string, Tuple<Func<object>, Func<object>>> getSubmap(TContainer container)
-        {
-            Dictionary<string, Tuple<Func<object>, Func<object>>> subMap;
-
-            if (!map.TryGetValue(container, out subMap))
-            {
-                map[container] = subMap = new Dictionary<string, Tuple<Func<object>, Func<object>>>();
-            }
-            return subMap;
         }
     }
 }

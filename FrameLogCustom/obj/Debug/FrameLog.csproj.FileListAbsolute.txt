@@ -1,0 +1,9 @@
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\FrameLog.dll.config
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\FrameLog.dll
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\FrameLog.pdb
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\EntityFramework.dll
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\EntityFramework.SqlServer.dll
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\EntityFramework.xml
+C:\Source\Antares\InternalFrameworks\FrameLog\bin\Debug\EntityFramework.SqlServer.xml
+C:\Source\Antares\InternalFrameworks\FrameLog\obj\Debug\FrameLog.dll
+C:\Source\Antares\InternalFrameworks\FrameLog\obj\Debug\FrameLog.pdb

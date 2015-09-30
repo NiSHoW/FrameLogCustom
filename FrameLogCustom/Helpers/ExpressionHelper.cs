@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using FrameLog.Exceptions;
 
 namespace FrameLog.Helpers
 {
@@ -8,17 +9,42 @@ namespace FrameLog.Helpers
     {
         public static string GetPropertyName<TModel, TProperty>(this Expression<Func<TModel, TProperty>> lambda)
         {
-            Type type = typeof(TModel);
+            string result = GetPropertyName(lambda.Body);
+            if (result == null)
+            {
+                throw new InvalidPropertyExpressionException(lambda);
+            }
+            return result;
+        }
 
-            MemberExpression member = lambda.Body as MemberExpression;
+        private static string GetPropertyName(Expression expression)
+        {
+            MemberExpression member = expression as MemberExpression;
             if (member == null)
-                throw new ArgumentException(string.Format("Expression '{0}' refers to a method, not a property.", lambda.ToString()));
+                return null;
 
             PropertyInfo propInfo = member.Member as PropertyInfo;
             if (propInfo == null)
-                throw new ArgumentException(string.Format("Expression '{0}' refers to a field, not a property.", lambda.ToString()));
+                return null;
 
-            return propInfo.Name;
+            string parent = GetPropertyName(member.Expression);
+            return Join(parent, propInfo.Name);
+        }
+
+        public static string Join(string a, string b)
+        {
+            if (a == null && b == null)
+            {
+                return null;
+            }
+            else if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            {
+                return a + b;
+            }
+            else
+            {
+                return a + "." + b;
+            }
         }
     }
 }

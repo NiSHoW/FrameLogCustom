@@ -55,6 +55,8 @@ namespace FrameLog.Filter
         /// Gets the types and stores the errors for later. See the comment in 
         /// buildTypeLookup()
         /// </summary>
+        [System.Diagnostics.DebuggerNonUserCode()] 
+        [System.Diagnostics.DebuggerHidden()] 
         private IEnumerable<Type> getTypes(Assembly assembly)
         {
             try

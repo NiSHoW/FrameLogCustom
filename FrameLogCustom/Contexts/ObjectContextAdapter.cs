@@ -1,14 +1,15 @@
-﻿using System;
+﻿using FrameLog.Exceptions;
+using FrameLog.Models;
+using System;
 using System.Data.Entity.Core;
 using System.Data.Entity.Core.Metadata.Edm;
 using System.Data.Entity.Core.Objects;
 using System.Linq;
 using System.Reflection;
-using FrameLog.Models;
 
 namespace FrameLog.Contexts
 {
-    public abstract class ObjectContextAdapter<TChangeSet, TPrincipal> 
+    public abstract partial class ObjectContextAdapter<TChangeSet, TPrincipal> 
         : IFrameLogContext<TChangeSet, TPrincipal>
         where TChangeSet : IChangeSet<TPrincipal>
     {
@@ -24,7 +25,7 @@ namespace FrameLog.Contexts
             return context.SaveChanges(options);
         }
 
-        public object GetObjectByKey(EntityKey key)
+        public virtual object GetObjectByKey(EntityKey key)
         {
             return context.GetObjectByKey(key);
         }
@@ -39,10 +40,37 @@ namespace FrameLog.Contexts
         }
         public virtual object GetObjectByReference(Type type, string reference)
         {
-            var container = context.MetadataWorkspace.GetEntityContainer(context.DefaultContainerName, DataSpace.CSpace);
-            var set = container.BaseEntitySets.First(meta => meta.ElementType.Name == type.Name);
-            var key = new EntityKey(container.Name + "." + set.Name, KeyPropertyName, KeyFromReference(reference));
-            return GetObjectByKey(key);
+            try
+            {
+                var container = context.MetadataWorkspace.GetEntityContainer(context.DefaultContainerName, DataSpace.CSpace);
+                var set = container.BaseEntitySets.FirstOrDefault(meta => meta.ElementType.Name == type.Name);
+                if (set == null)
+                    throw new ObjectTypeDoesNotExistInDataModelException(type);
+
+                var key = new EntityKey(container.Name + "." + set.Name, KeyPropertyName, KeyFromReference(reference));
+                return GetObjectByKey(key);
+            }
+            catch (Exception e)
+            {
+                throw new FailedToRetrieveObjectException(type, reference, e);
+            }
+        }
+        public virtual bool ObjectHasReference(object entity)
+        {
+            if (entity == null)
+                return false;
+
+            IHasLoggingReference entityWithReference = entity as IHasLoggingReference;
+            if (entityWithReference != null)
+                return true;
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.IgnoreCase;
+            string keyPropertyName = GetReferencePropertyForObject(entity);
+            var keyProperty = entity.GetType().GetProperty(keyPropertyName, flags);
+            if (keyProperty != null)
+                return true;
+
+            return false;
         }
         public virtual string GetReferenceForObject(object entity)
         {
@@ -51,7 +79,7 @@ namespace FrameLog.Contexts
 
             IHasLoggingReference entityWithReference = entity as IHasLoggingReference;
             if (entityWithReference != null)
-                return entityWithReference.Reference.ToString();
+                return entityWithReference.Reference().ToString();
 
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.IgnoreCase;
             string keyPropertyName = GetReferencePropertyForObject(entity);
@@ -59,11 +87,15 @@ namespace FrameLog.Contexts
             if (keyProperty != null)
                 return keyProperty.GetGetMethod().Invoke(entity, null).ToString();
 
-            throw new Exception(string.Format("Attempted to log a foreign entity that did not implement IHasLoggingReference and that did not have a property with name '{0}'. It had type {1}, and it was '{2}'",
+            throw new InvalidOperationException(string.Format("Attempted to log a foreign entity that did not implement IHasLoggingReference and that did not have a property with name '{0}'. It had type {1}, and it was '{2}'",
                     KeyPropertyName, entity.GetType(), entity));
         }
         public virtual string GetReferencePropertyForObject(object entity)
         {
+            IHasLoggingReference entityWithReference = entity as IHasLoggingReference;
+            if (entityWithReference != null)
+                return entityWithReference.ReferenceKey();
+
             return KeyPropertyName;
         }
 
@@ -77,9 +109,14 @@ namespace FrameLog.Contexts
         }
         public abstract Type UnderlyingContextType { get; }
 
-        public void AcceptAllChanges()
+        public virtual void DetectChanges()
         {
-            context.AcceptAllChanges();
+            context.DetectChanges();
+        }
+
+        public virtual int SaveAndAcceptAllChanges()
+        {
+            return context.SaveChanges(SaveOptions.AcceptAllChangesAfterSave);
         }
 
         public abstract IQueryable<IChangeSet<TPrincipal>> ChangeSets { get; }

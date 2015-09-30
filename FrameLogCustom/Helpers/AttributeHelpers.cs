@@ -41,7 +41,9 @@ namespace FrameLog.Helpers
             {
                 PropertyInfo metaProperty = type.GetProperty(property.Name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
                 if (metaProperty != null)
-                    attributes.AddRange(metaProperty.GetCustomAttributes(false).Where(a => a is T).Cast<T>());
+                {
+                    attributes.AddRange(Attribute.GetCustomAttributes(metaProperty, true).Where(a => a is T).Cast<T>());
+                }
             }
             return attributes;
         }
@@ -50,7 +52,7 @@ namespace FrameLog.Helpers
             List<T> attributes = new List<T>();
             foreach (Type type in types)
             {
-                 attributes.AddRange(type.GetCustomAttributes(false).Where(a => a is T).Cast<T>());
+                 attributes.AddRange(type.GetCustomAttributes(true).Where(a => a is T).Cast<T>());
             }
             return attributes;
         }

@@ -1,0 +1,163 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{46358863-DEBA-48F5-AD02-4A44AB69102D}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>FrameLog</RootNamespace>
+    <AssemblyName>FrameLog</AssemblyName>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
+    <RestorePackages>true</RestorePackages>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\EntityFramework.6.1.2\lib\net45\EntityFramework.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="EntityFramework.SqlServer, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\EntityFramework.6.1.2\lib\net45\EntityFramework.SqlServer.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Transactions" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Contexts\DbContextAdapter.cs" />
+    <Compile Include="Contexts\DbContextAdapterAsync.cs" />
+    <Compile Include="Contexts\IFrameLogContext.cs" />
+    <Compile Include="Contexts\IFrameLogContextAsync.cs" />
+    <Compile Include="Contexts\IHistoryContext.cs" />
+    <Compile Include="Contexts\ObjectContextAdapter.cs" />
+    <Compile Include="Contexts\ObjectContextAdapterAsync.cs" />
+    <Compile Include="Exceptions\ConflictingTransactionException.cs" />
+    <Compile Include="Exceptions\ErrorInDeferredCalculation.cs" />
+    <Compile Include="Exceptions\FailedToRetrieveObjectException.cs" />
+    <Compile Include="Exceptions\InvalidFrameLogRecordException.cs" />
+    <Compile Include="Exceptions\InvalidPropertyExpressionException.cs" />
+    <Compile Include="Exceptions\ObjectTypeDoesNotExistInDataModelException.cs" />
+    <Compile Include="Exceptions\UnableToCloneObjectException.cs" />
+    <Compile Include="Exceptions\UnableToInstantiateObjectException.cs" />
+    <Compile Include="Filter\AttributeBasedLoggingFilter.cs" />
+    <Compile Include="Filter\BlacklistLoggingFilter.cs" />
+    <Compile Include="Filter\DoLogAttribute.cs" />
+    <Compile Include="Filter\DoNotLogAttribute.cs" />
+    <Compile Include="Filter\FilterAttributeCache.cs" />
+    <Compile Include="Filter\Filters.cs" />
+    <Compile Include="Filter\IFilterAttribute.cs" />
+    <Compile Include="Filter\ILoggingFilter.cs" />
+    <Compile Include="Filter\ILoggingFilterProvider.cs" />
+    <Compile Include="Filter\TypeLookup.cs" />
+    <Compile Include="Filter\UnknownTypeException.cs" />
+    <Compile Include="Filter\WhitelistLoggingFilter.cs" />
+    <Compile Include="FrameLogModule.cs" />
+    <Compile Include="FrameLogModuleAsync.cs" />
+    <Compile Include="Helpers\AttributeHelpers.cs" />
+    <Compile Include="Helpers\ExpressionHelper.cs" />
+    <Compile Include="Helpers\MetadataSpaceMapper.cs" />
+    <Compile Include="Helpers\ObjectHelpers.cs" />
+    <Compile Include="Helpers\ReferenceEqualityComparer.cs" />
+    <Compile Include="History\Change.cs" />
+    <Compile Include="History\ChangeType.cs" />
+    <Compile Include="History\CreationDoesNotExistInLogException.cs" />
+    <Compile Include="History\FilteredObjectChange.cs" />
+    <Compile Include="History\QueryableHistoryExplorer.cs" />
+    <Compile Include="History\HistoryExplorer.cs" />
+    <Compile Include="History\HistoryExplorerCloneStrategies.cs" />
+    <Compile Include="History\HistoryHelpers.cs" />
+    <Compile Include="History\IChange.cs" />
+    <Compile Include="History\PropertyChangeProcessor.cs" />
+    <Compile Include="History\UnknownPropertyInLogException.cs" />
+    <Compile Include="IHasLoggingReference.cs" />
+    <Compile Include="ISaveResult.cs" />
+    <Compile Include="Logging\ChangeLogger.cs" />
+    <Compile Include="Logging\ChangeType.cs" />
+    <Compile Include="Logging\DeferredObjectChange.cs" />
+    <Compile Include="Logging\DeferredValue.cs" />
+    <Compile Include="Logging\DeferredValueMap.cs" />
+    <Compile Include="Logging\IOven.cs" />
+    <Compile Include="Logging\Recorder.cs" />
+    <Compile Include="Logging\SaveResult.cs" />
+    <Compile Include="Logging\ValuePairs\DataRecordValuePair.cs" />
+    <Compile Include="Logging\ValuePairs\IValuePair.cs" />
+    <Compile Include="Logging\ValuePairs\ValuePair.cs" />
+    <Compile Include="Logging\ValuePairs\ValuePairSource.cs" />
+    <Compile Include="Models\IChangeSet.cs" />
+    <Compile Include="Models\IChangeSetFactory.cs" />
+    <Compile Include="Models\IObjectChange.cs" />
+    <Compile Include="Models\IPropertyChange.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Transactions\ITransactionProvider.cs" />
+    <Compile Include="Transactions\ITransactionProviderAsync.cs" />
+    <Compile Include="Transactions\NullTransactionProvider.cs" />
+    <Compile Include="Transactions\NullTransactionProviderAsync.cs" />
+    <Compile Include="Transactions\TransactionScopeProvider.cs" />
+    <Compile Include="Transactions\TransactionScopeProviderAsync.cs" />
+    <Compile Include="Translation\Binders\IBinder.cs" />
+    <Compile Include="Translation\Binders\IBindManager.cs" />
+    <Compile Include="Translation\LegacyBindManager.cs" />
+    <Compile Include="Translation\LegacySerializationManager.cs" />
+    <Compile Include="Translation\Serializers\ISerializationManager.cs" />
+    <Compile Include="Translation\Serializers\ISerlizer.cs" />
+    <Compile Include="Translation\ValueTranslationManager.cs" />
+    <Compile Include="Translation\ValueTranslators\BinaryBlobTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\CollectionTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\DateTimeOffsetTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\DateTimeTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\EnumTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\DbGeographyTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\GuidTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\IValueTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\NullableBinder.cs" />
+    <Compile Include="Translation\ValueTranslators\PrimitiveTranslator.cs" />
+    <Compile Include="Translation\ValueTranslators\TimeSpanTranslator.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SolutionDir)\.nuget\NuGet.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\.nuget\NuGet.targets'))" />
+  </Target>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

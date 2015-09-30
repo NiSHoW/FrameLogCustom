@@ -1,11 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
-using FrameLog.Contexts;
+﻿using FrameLog.Contexts;
+using FrameLog.Exceptions;
 using FrameLog.Helpers;
 using FrameLog.Models;
+using System;
+using System.Collections.Generic;
+using System.Data.Entity;
+using System.Linq;
+using System.Linq.Expressions;
+using FrameLog.Translation;
+using FrameLog.Translation.Binders;
 
 namespace FrameLog.History
 {
@@ -17,10 +20,14 @@ namespace FrameLog.History
         where TChangeSet : IChangeSet<TPrincipal>
     {
         private IHistoryContext<TChangeSet, TPrincipal> db;
+        private IBindManager binder;
+        private HistoryExplorerCloneStrategies cloneStrategy;
 
-        public HistoryExplorer(IHistoryContext<TChangeSet, TPrincipal> db)
+        public HistoryExplorer(IHistoryContext<TChangeSet, TPrincipal> db, IBindManager binder = null, HistoryExplorerCloneStrategies cloneStrategy = HistoryExplorerCloneStrategies.Default)
         {
             this.db = db;
+            this.binder = (binder ?? new ValueTranslationManager(db));
+            this.cloneStrategy = cloneStrategy;
         }
 
         /// <summary>
@@ -31,28 +38,62 @@ namespace FrameLog.History
         {
             string typeName = typeof(TModel).Name;
             string propertyName = property.GetPropertyName();
+            string propertyPrefix = propertyName + ".";
             string reference = db.GetReferenceForObject(model);
-
-            return db.ObjectChanges
-                .Where(o => o.TypeName == typeName)
-                .Where(o => o.ObjectReference == reference)
+            var propertyFunc = property.Compile();
+            
+            var objectChanges = changesTo(model)
                 .SelectMany(o => o.PropertyChanges)
-                .Where(p => p.PropertyName == propertyName)
-                .OrderByDescending(p => p.ObjectChange.ChangeSet.Timestamp)
+                .Where(p => p.PropertyName == propertyName || p.PropertyName.StartsWith(propertyPrefix))
                 .AsEnumerable()
-                .Select(p => new Change<TValue, TPrincipal>(bind<TValue>(p.Value), p.ObjectChange.ChangeSet.Author, p.ObjectChange.ChangeSet.Timestamp));
+                .GroupBy(p => p.ObjectChange)
+                .Select(g => new FilteredObjectChange<TPrincipal>(g.Key, g));
+
+            // If the propert expression refers to a complex type then we will not have any changes
+            // directly to that property. Instead we will see changes to sub-properties.
+            // We retrieve the history differently for complex types, so here we distinguish which
+            // case we are in by looking at the first change.
+            var sample = objectChanges.SelectMany(o => o.PropertyChanges).FirstOrDefault();
+            if (sample != null && sample.PropertyName.StartsWith(propertyPrefix))
+            {
+                // Construct a "seed" instance of the complex type, and then apply changes to it in order
+                // to reconstruct the intermediate states.
+                return applyChangesTo(HistoryHelpers.Instantiate<TValue>(), objectChanges, propertyName)
+                    .OrderByDescending(c => c.TimestampDate);
+            }
+            else
+            {
+                // Just directly bind the simple property values
+                return objectChanges
+                    .OrderByDescending(o => o.ChangeSet.TimestampDate)
+                    .SelectMany(o => o.PropertyChanges)
+                    .Select(p => Change.FromObjectChange(binder.Bind<TValue>(p.Value), p.ObjectChange));
+            }
         }
+
         /// <summary>
         /// Rehydrates versions of the object, one for each logged change to the object,
         /// most recent first (descending date order).
         /// </summary>
         public virtual IEnumerable<IChange<TModel, TPrincipal>> ChangesTo<TModel>(TModel model)
-            where TModel : ICloneable, new()
+            where TModel : class
         {
             var changes = changesTo(model);
-            return applyChangesTo(new TModel(), changes)
-                .OrderByDescending(c => c.Timestamp);
+            return applyChangesTo(model, changes)
+                .OrderByDescending(c => c.TimestampDate);
         }
+        /// <summary>
+        /// Rehydrates versions of the object, one for each logged change to the object,
+        /// most recent first (descending date order).
+        /// </summary>
+        public virtual IEnumerable<IChange<TModel, TPrincipal>> ChangesTo<TModel>(string reference)
+            where TModel : class
+        {
+            var changes = changesTo<TModel>(reference);
+            return applyChangesTo(Activator.CreateInstance<TModel>(), changes)
+                .OrderByDescending(c => c.TimestampDate);
+        }
+
         /// <summary>
         /// Returns the timestamp and author information for the creation of the object.
         /// If the creation of the object is not recorded in the log, throws a
@@ -61,13 +102,10 @@ namespace FrameLog.History
         public virtual IChange<TModel, TPrincipal> GetCreation<TModel>(TModel model)
         {
             var firstChange = changesTo(model).FirstOrDefault();
-            if (firstChange == null || !isCreation(model, firstChange))
+            if (firstChange == null || TypeOfChange<TModel>(firstChange) != ChangeType.Add)
                 throw new CreationDoesNotExistInLogException(model);
             else
-            {
-                var set = firstChange.ChangeSet;
-                return new Change<TModel, TPrincipal>(model, set.Author, set.Timestamp);
-            }
+                return Change.FromObjectChange(model, firstChange);
         }
 
         /// <summary>
@@ -75,15 +113,25 @@ namespace FrameLog.History
         /// </summary>
         protected virtual IOrderedQueryable<IObjectChange<TPrincipal>> changesTo<TModel>(TModel model)
         {
-            string typeName = typeof(TModel).Name;
             string reference = db.GetReferenceForObject(model);
+            return changesTo<TModel>(reference);
+        }
 
+        /// <summary>
+        /// Returns all IObjectChanges that are relevant to the object identified by this reference, earliest first
+        /// </summary>
+        protected virtual IOrderedQueryable<IObjectChange<TPrincipal>> changesTo<TModel>(string reference)
+        {
+            string typeName = typeof(TModel).Name;
             var changes = db.ObjectChanges
+                .Include(t => t.PropertyChanges)
+                .Include(t => t.ChangeSet)
                 .Where(o => o.TypeName == typeName)
                 .Where(o => o.ObjectReference == reference)
-                .OrderBy(o => o.ChangeSet.Timestamp);
+                .OrderBy(o => o.ChangeSet.TimestampDate);
             return changes;
         }
+
         /// <summary>
         /// Given a starting state of the object ("seed") and an ordered series of changes, returns an
         /// ordered series of objects of type TModel. The first object returned is the seed state with
@@ -94,104 +142,104 @@ namespace FrameLog.History
         /// that the first change applied will be the object's creation, assuming logs are complete,
         /// and that this will set every field.
         /// </summary>
-        protected virtual IEnumerable<IChange<TModel, TPrincipal>> applyChangesTo<TModel>(TModel seed, IEnumerable<IObjectChange<TPrincipal>> changes)
-            where TModel : ICloneable
+        protected virtual IEnumerable<IChange<TModel, TPrincipal>> applyChangesTo<TModel>(TModel seed, IEnumerable<IObjectChange<TPrincipal>> changes, string prefix = "")
         {
             TModel current = seed;
             foreach (var change in changes)
             {
-                var c = apply(change, current);
-                yield return c;
-                current = c.Value;
+                // If this was the change that deleted the object, just return null, don't try
+                // applying this change
+                if (TypeOfChange<TModel>(change) == ChangeType.Delete)
+                {
+                    yield return Change.FromObjectChange<TModel, TPrincipal>(default(TModel), change);
+                    break;
+                }
+                else
+                {
+                    var c = apply(change, current, prefix);
+                    yield return c;
+                    current = c.Value;
+                }
             }
         }
 
-        protected virtual IChange<TModel, TPrincipal> apply<TModel>(IObjectChange<TPrincipal> change, TModel model)
-            where TModel : ICloneable
+        protected virtual IChange<TModel, TPrincipal> apply<TModel>(IObjectChange<TPrincipal> change, TModel model, string prefix)
         {
             var type = typeof(TModel);
-            var newVersion = (TModel)model.Clone();
-            foreach (var propertyChange in change.PropertyChanges)
+            var newVersion = clone(model);
+            var errors = new List<Exception>();
+            foreach (var propertyChange in change.PropertyChanges.Select(p => new PropertyChangeProcessor<TPrincipal>(p)))
             {
-                var property = model.GetType().GetProperty(propertyChange.PropertyName, 
-                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
-                var value = bind(propertyChange.Value, property.PropertyType);
-                property.SetValue(newVersion, value, null);
+                try
+                {
+                    propertyChange.ApplyTo(newVersion, binder, prefix);
+                }
+                catch (UnknownPropertyInLogException<TPrincipal> e)
+                {
+                    errors.Add(e);
+                }
             }
-            return new Change<TModel, TPrincipal>(newVersion, 
-                change.ChangeSet.Author, 
-                change.ChangeSet.Timestamp);
+            return Change.FromObjectChange(newVersion, change, errors: errors);
         }
 
-        /// <summary>
-        /// Given an object change for a particular object, returns true if this object
-        /// change represents the object being added to the database, rather than a subsequent
-        /// update or delete.
-        /// </summary>
-        protected virtual bool isCreation(object model, IObjectChange<TPrincipal> change)
-        {
-            string primaryKeyField = db.GetReferencePropertyForObject(model);
-            return change.PropertyChanges
-                .Select(p => p.PropertyName)
-                .Contains(primaryKeyField);
-        }
-
-        protected virtual TValue bind<TValue>(string raw)
-        {
-            return (TValue)bind(raw, typeof(TValue));
-        }
-        protected virtual object bind(string raw, Type type)
-        {
-            if (type.IsPrimitive || type == typeof(string))
-                return Convert.ChangeType(raw, type);
-            else if (typeof(DateTime?).IsAssignableFrom(type))
-                return bindDateTime(raw);
-            else if (isCollectionType(type))
-                return bindCollection(raw, type);
-            else
-            {
-                if (raw == null)
-                    return null;
-                else
-                    return db.GetObjectByReference(type, raw);
-            }
-        }
-        protected virtual bool isCollectionType(Type type)
-        {
-            return type.IsGenericType
-                && typeof(ICollection<>).MakeGenericType(type.GetGenericArguments().First()).IsAssignableFrom(type);
-        }
-        protected virtual object bindCollection(string raw, Type type)
-        {
-            var itemType = type.GetGenericArguments().First();
-            object collection = Activator.CreateInstance(type);
-            GetType().GetMethod("fillCollection", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy)
-                .MakeGenericMethod(new Type[] { itemType })
-                .Invoke(this, new object[] { collection, raw });
-            return collection;
-        }
-        protected virtual void fillCollection<ItemType>(ICollection<ItemType> collection, string raw)
-        {
-            foreach (var reference in raw.Split(new char[] { ',' }))
-            {
-                collection.Add(bind<ItemType>(reference));
-            }
-        }
-
-        protected static DateTime? bindDateTime(string raw)
+        private TModel clone<TModel>(TModel model)
         {
             try
             {
-                return DateTime.Parse(raw);
+                if (cloneStrategy.HasFlag(HistoryExplorerCloneStrategies.UseCloneable))
+                {
+                    var cloneable = (model as ICloneable);
+                    if (cloneable != null)
+                        return (TModel) cloneable.Clone();
+                }
+
+                if (cloneStrategy.HasFlag(HistoryExplorerCloneStrategies.DeepCopy))
+                {
+                    return model.DeepCopy();
+                }
+
+                throw new UnableToCloneObjectException(typeof(TModel));
             }
-            catch (ArgumentNullException)
+            catch (Exception ex)
             {
-                return null;
+                throw new UnableToCloneObjectException(typeof(TModel), ex);
             }
-            catch (FormatException)
+        }
+
+        /// <summary>
+        /// Returns whether the object change consists of adding a new entity,
+        /// deleting an entity, or modifying an existing entity
+        /// </summary>
+        public virtual ChangeType TypeOfChange<TModel>(IObjectChange<TPrincipal> change)
+        {
+            var keyChange = primaryKeyChange<TModel>(change);
+            if (keyChange == null)
+                return ChangeType.Modify;
+            else
             {
-                return null;
+                if (keyChange.Value == null)
+                {
+                    return ChangeType.Delete;
+                }
+                else
+                {
+                    return ChangeType.Add;
+                }
             }
+        }
+
+        protected virtual IPropertyChange<TPrincipal> primaryKeyChange<T>(IObjectChange<TPrincipal> change)
+        {
+            var model = Activator.CreateInstance(typeof(T), true);
+            string primaryKeyField = db.GetReferencePropertyForObject(model);
+            return change.PropertyChanges
+                .SingleOrDefault(p => p.PropertyName == primaryKeyField);
+        } 
+
+        public HistoryExplorerCloneStrategies CloneStrategy
+        {
+            get { return cloneStrategy; }
+            set { cloneStrategy = value; }
         }
     }
 }

@@ -12,12 +12,13 @@ namespace FrameLog.Contexts
         MetadataWorkspace Workspace { get; }
     }
 
-    public interface IFrameLogContext<TChangeSet, TPrincipal> : IHistoryContext<TChangeSet, TPrincipal>, IFrameLogContext
+    public partial interface IFrameLogContext<TChangeSet, TPrincipal> : IHistoryContext<TChangeSet, TPrincipal>, IFrameLogContext
         where TChangeSet : IChangeSet<TPrincipal>
     {
         int SaveChanges(SaveOptions options);
         ObjectStateManager ObjectStateManager { get; }
-        void AcceptAllChanges();
+        void DetectChanges();
+        int SaveAndAcceptAllChanges();
 
         object GetObjectByKey(EntityKey key);
         void AddChangeSet(TChangeSet changeSet);

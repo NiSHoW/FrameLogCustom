@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Data.Entity;
+using FrameLog.History;
 
 namespace FrameLog.Models
 {
@@ -9,8 +9,8 @@ namespace FrameLog.Models
         IEnumerable<IPropertyChange<TPrincipal>> PropertyChanges { get; }
         void Add(IPropertyChange<TPrincipal> propertyChange);
 
+        ChangeType ChangeType { get; set; }
         string TypeName { get; set; }
-        string ObjectReference { get; set; }
-        EntityState OperationType { get; set; }
+        string ObjectReference { get; set; }        
     }
 }

@@ -1,5 +1,6 @@
 ﻿using FrameLog.Contexts;
 using FrameLog.Filter;
+using FrameLog.Logging.ValuePairs;
 using FrameLog.Models;
 using System;
 using System.Collections.Generic;
@@ -9,6 +10,8 @@ using System.Data.Entity.Core.Metadata.Edm;
 using System.Data.Entity.Core.Objects;
 using System.Linq;
 using System.Reflection;
+using FrameLog.History;
+using FrameLog.Translation.Serializers;
 
 namespace FrameLog.Logging
 {
@@ -19,14 +22,16 @@ namespace FrameLog.Logging
         private IChangeSetFactory<TChangeSet, TPrincipal> factory;
         private Recorder<TChangeSet, TPrincipal> recorder;
         private ILoggingFilter filter;
+        private ISerializationManager serializer;
 
         public ChangeLogger(IFrameLogContext<TChangeSet, TPrincipal> context, 
             IChangeSetFactory<TChangeSet, TPrincipal> factory,
-            ILoggingFilter filter)
+            ILoggingFilter filter, ISerializationManager serializer)
         {
             this.context = context;
             this.factory = factory;
-            this.recorder = new Recorder<TChangeSet,TPrincipal>(factory);
+            this.serializer = serializer;
+            this.recorder = new Recorder<TChangeSet, TPrincipal>(factory, serializer);
             this.filter = filter;
         }
 
@@ -46,14 +51,13 @@ namespace FrameLog.Logging
         {
             // There are two kinds of changes that the ObjectStateManager gives us.
             // See the two methods for more information.
-            
             if (entry.IsRelationship)
             {
                 logRelationshipChange(entry);
             }
             else
             {
-                logScalarChanges(entry);
+                 logScalarChanges(entry);
             }
         }
 
@@ -73,15 +77,12 @@ namespace FrameLog.Logging
             {
                 if (filter.ShouldLog(entry.Entity.GetType(), propertyName))
                 {
-                    var valuePair = getValuePair(entry, propertyName);
-                    if (valuePair.HasChanged)
+                    // We can have multiple changes for the same property if its a complex type
+                    var valuePairs = ValuePairSource.Get(entry, propertyName, serializer).Where(p => p.HasChanged);
+                    var entity = entry.Entity;
+                    foreach (var valuePair in valuePairs)
                     {
-                        recorder.Record(entry.Entity,
-                            context.GetReferenceForObject(entry.Entity),
-                            propertyName,
-                            () => valuePair.NewValue,
-                            entry.State,
-                            () => valuePair.OriginalValue);
+                        recorder.Record(entity, changeTypeMapper(entry.State), () => context.GetReferenceForObject(entity), valuePair.PropertyName, () => valuePair.NewValue, () => valuePair.OriginalValue);
                     }
                 }
             }
@@ -131,9 +132,10 @@ namespace FrameLog.Logging
                 return;
 
             // Generate the change
+            Func<object> originalValue = getForeignValue(entry, entity, foreignEnd, property.Name);
             Func<object> value = getForeignValue(entry, entity, foreignEnd, property.Name);
 
-            recorder.Record(entity, context.GetReferenceForObject(entity), property.Name, value, entry.State, null /* TODO: Fabricio retirar */);
+            recorder.Record(entity, changeTypeMapper(entry.State, true), () => context.GetReferenceForObject(entity), property.Name, value, originalValue, true);
         }
 
         private Func<object> getForeignValue(ObjectStateEntry entry, object entity, AssociationEndMember foreignEnd, string propertyName)
@@ -153,6 +155,19 @@ namespace FrameLog.Logging
                 else
                     return null;
             }
+        }
+
+
+        private ChangeType changeTypeMapper(EntityState state, Boolean isManyMany = false)
+        {
+            switch (state)
+            {
+                case EntityState.Added: return (isManyMany) ? ChangeType.Modify : ChangeType.Add;
+                case EntityState.Deleted: return ChangeType.Delete;
+                case EntityState.Modified: return ChangeType.Modify;
+            }
+
+            return ChangeType.Unknown;
         }
 
         private Func<object> manyToManyValue(object entity, string propertyName)
@@ -189,22 +204,6 @@ namespace FrameLog.Logging
             return context.GetReferenceForObject(entity);
         }
 
-        private ValuePair getValuePair(ObjectStateEntry entry, string property)
-        {
-            switch (entry.State)
-            {
-                case EntityState.Added:
-                    return new ValuePair(null, entry.CurrentValues[property], entry.State);
-                case EntityState.Deleted:
-                    return new ValuePair(entry.OriginalValues[property], null, entry.State);
-                case EntityState.Modified:
-                    return new ValuePair(entry.OriginalValues[property], 
-                        entry.CurrentValues[property], entry.State);
-                default:
-                    throw new NotImplementedException(string.Format("Unable to deal with ObjectStateEntry in '{0}' state",
-                        entry.State));
-            }
-        }
 
         private IEnumerable<string> getChangedProperties(ObjectStateEntry entry)
         {
