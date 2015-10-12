@@ -20,9 +20,10 @@ namespace FrameLog.Logging.ValuePairs
             switch (state)
             {
                 case EntityState.Added:
-                    return Get(null, () => entry.CurrentValues[propertyName], propertyName, state, serializer);
+                    return Get(() => null, () => entry.CurrentValues[propertyName], propertyName, state, serializer);
                 case EntityState.Deleted:
-                    return Get(() => entry.OriginalValues[propertyName], null, propertyName, state, serializer);
+                    var knowValue = entry.OriginalValues[propertyName];
+                    return Get(() => knowValue, () => null, propertyName, state, serializer);
                 case EntityState.Modified:
                     return Get(() => entry.OriginalValues[propertyName], 
 						() => entry.CurrentValues[propertyName], propertyName, state, serializer);
